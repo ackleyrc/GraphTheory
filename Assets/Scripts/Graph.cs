@@ -5,7 +5,9 @@ using UnityEngine;
 
 public class Graph
 {
+    HashSet<Node> nodes = new HashSet<Node>();
     HashSet<Edge> edges = new HashSet<Edge>();
+
     NodeEdgePairs edgesFromNode = new NodeEdgePairs();
     NodeEdgePairs edgesToNode = new NodeEdgePairs();
 
@@ -22,6 +24,70 @@ public class Graph
             edgesFromNode.Add(newEdge.GetFirstNode(), newEdge);
             edgesToNode.Add(newEdge.GetLastNode(), newEdge);
         }
+    }
+
+    public struct RandomPath
+    {
+        public Node startNode;
+        public Node finishNode;
+        public List<Edge> pathEdges;
+    }
+
+    /// <summary>
+    /// Generates a random path of the required length that does not intersect with itself. 
+    /// Accepts an optional set of Nodes which should be ignored, or a dictionary of edges to ignore 
+    /// at a given node. Generates an error if required length cannot be met.
+    /// </summary>
+    /// <param name="requiredPathLength"></param>
+    /// <param name="closedNodeSet"></param>
+    /// <param name="closedEdgeSet"></param>
+    /// <returns></returns>
+    public RandomPath GetRandomPath(int requiredPathLength, HashSet<Node> closedNodeSet = null, Dictionary<Node, HashSet<Edge>> closedEdgeSet = null)
+    {
+        List<Edge> pathEdges = new List<Edge>();
+        
+        Node startNode = edgesFromNode.GetNodes().ToList()[Random.Range(0, nodes.Count)];
+
+        closedNodeSet = closedNodeSet == null ? new HashSet<Node> { startNode } : closedNodeSet;
+        closedEdgeSet = closedEdgeSet == null ? new Dictionary<Node, HashSet<Edge>>() : closedEdgeSet;
+
+        Node currentNode = startNode;
+        while (pathEdges.Count < requiredPathLength)
+        {
+            if (!closedEdgeSet.Keys.Contains(currentNode))
+            {
+                closedEdgeSet.Add(currentNode, new HashSet<Edge>());
+            }
+            HashSet<Edge> availableEdges = new HashSet<Edge>(
+                            edgesFromNode.GetEdges(currentNode).Where(x => !closedEdgeSet[currentNode].Contains(x)
+                                                                        && !closedNodeSet.Contains(x.GetOtherNode(currentNode))
+                                                                        && !pathEdges.Contains(x)).ToList());
+            // Back-track if we've reached a dead end
+            if (availableEdges.Count == 0)
+            {
+                if (currentNode == startNode)
+                {
+                    Debug.LogError("Random Path could not be found for start node: " + startNode + " with target path length: " + requiredPathLength);
+                }
+                Edge previousPath = pathEdges[pathEdges.Count - 1];
+                Node previousNode = previousPath.GetOtherNode(currentNode);
+                closedEdgeSet[previousNode].Add(previousPath);
+                pathEdges.Remove(previousPath);
+                currentNode = previousNode;
+                continue;
+            }
+            Edge nextEdge = availableEdges.ToList<Edge>()[Random.Range(0, availableEdges.Count)];
+            pathEdges.Add(nextEdge);
+            closedNodeSet.Add(currentNode);
+            currentNode = nextEdge.GetOtherNode(currentNode);
+        }
+
+        RandomPath randomPath = new RandomPath();
+        randomPath.startNode = startNode;
+        randomPath.finishNode = currentNode;
+        randomPath.pathEdges = pathEdges;
+
+        return randomPath;
     }
 }
 
@@ -46,13 +112,20 @@ public class NodeEdgePairs
         }
     }
 
-    public List<Edge> GetEdges(Node node)
+    public HashSet<Node> GetNodes()
     {
-        return nodeEdgePairs[node];
+        return new HashSet<Node>(nodeEdgePairs.Keys);
     }
 
     public delegate bool EdgeFilterCriteria(Edge edge);
 
+    /// <summary>
+    /// Returns a list of the edges emanating from the given node. Optionally accepts  
+    /// a predicate function filtering out edges that do not meet the provided criteria.
+    /// </summary>
+    /// <param name="node"></param>
+    /// <param name="criteria"></param>
+    /// <returns></returns>
     public List<Edge> GetEdges(Node node, EdgeFilterCriteria criteria = null)
     {
         List<Edge> edges = nodeEdgePairs[node];
@@ -68,11 +141,20 @@ public class NodeEdgePairs
 
     public delegate int EdgeComparison(Edge edge1, Edge edge2);
 
+    /// <summary>
+    /// Sorts the list of edges for the provided node given a comparison function.
+    /// </summary>
+    /// <param name="node"></param>
+    /// <param name="compare"></param>
     public void SortEdges(Node node, EdgeComparison compare)
     {
         nodeEdgePairs[node].Sort((e1, e2) => compare(e1, e2));
     }
 
+    /// <summary>
+    /// Sorts all edges maintained in the object based on the given comparison function.
+    /// </summary>
+    /// <param name="compare"></param>
     public void SortAllEdges(EdgeComparison compare)
     {
         foreach (KeyValuePair<Node, List<Edge>> pair in nodeEdgePairs)
