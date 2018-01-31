@@ -6,7 +6,8 @@ using UnityEngine;
 public class Graph
 {
     HashSet<Edge> edges = new HashSet<Edge>();
-    NodeToEdges nodeToEdges = new NodeToEdges();
+    NodeEdgePairs edgesFromNode = new NodeEdgePairs();
+    NodeEdgePairs edgesToNode = new NodeEdgePairs();
 
     public void AddUndirectedEdge(Edge newEdge)
     {
@@ -16,54 +17,68 @@ public class Graph
 
     public void AddDirectedEdge(Edge newEdge)
     {
-        edges.Add(newEdge);
-
-        foreach (Node node in newEdge.GetNodes())
+        if (edges.Add(newEdge))
         {
-            nodeToEdges.Add(node, newEdge);
+            edgesFromNode.Add(newEdge.GetFirstNode(), newEdge);
+            edgesToNode.Add(newEdge.GetLastNode(), newEdge);
         }
+    }
+}
+
+public class NodeEdgePairs
+{
+    Dictionary<Node, List<Edge>> nodeEdgePairs;
+
+    public NodeEdgePairs()
+    {
+        this.nodeEdgePairs = new Dictionary<Node, List<Edge>>();
+    }
+
+    public void Add(Node node, Edge edge)
+    {
+        if (!nodeEdgePairs.Keys.Contains(node))
+        {
+            nodeEdgePairs.Add(node, new List<Edge> { edge });
+        }
+        else if (!nodeEdgePairs[node].Contains(edge))
+        {
+            nodeEdgePairs[node].Add(edge);
+        }
+    }
+
+    public List<Edge> GetEdges(Node node)
+    {
+        return nodeEdgePairs[node];
     }
 
     public delegate bool EdgeFilterCriteria(Edge edge);
 
-    public HashSet<Edge> GetEdges(Node node, EdgeFilterCriteria criteria = null)
+    public List<Edge> GetEdges(Node node, EdgeFilterCriteria criteria = null)
     {
-        HashSet<Edge> edges = nodeToEdges.GetEdges(node);
+        List<Edge> edges = nodeEdgePairs[node];
         if (criteria == null)
         {
             return edges;
         }
         else
         {
-            return new HashSet<Edge>(edges.ToList().Where(x => criteria(x)));
+            return edges.Where(x => criteria(x)).ToList();
         }
     }
-}
 
-public class NodeToEdges
-{
-    Dictionary<Node, HashSet<Edge>> nodeToEdges;
+    public delegate int EdgeComparison(Edge edge1, Edge edge2);
 
-    public NodeToEdges()
+    public void SortEdges(Node node, EdgeComparison compare)
     {
-        this.nodeToEdges = new Dictionary<Node, HashSet<Edge>>();
+        nodeEdgePairs[node].Sort((e1, e2) => compare(e1, e2));
     }
 
-    public void Add(Node node, Edge edge)
+    public void SortAllEdges(EdgeComparison compare)
     {
-        if (!nodeToEdges.Keys.Contains(node))
+        foreach (KeyValuePair<Node, List<Edge>> pair in nodeEdgePairs)
         {
-            nodeToEdges.Add(node, new HashSet<Edge> { edge });
+            pair.Value.Sort((e1, e2) => compare(e1, e2));
         }
-        else
-        {
-            nodeToEdges[node].Add(edge);
-        }
-    }
-
-    public HashSet<Edge> GetEdges(Node node)
-    {
-        return nodeToEdges[node];
     }
 }
 
@@ -85,6 +100,16 @@ public class Edge
         //      however, implementation and testing show that it is currently preserved.
         //      (I.e. preservation of order may be subject to change with future versions of .NET)
         this.subNodes = subNodes.Distinct().ToList();
+    }
+
+    public Node GetFirstNode()
+    {
+        return node1;
+    }
+
+    public Node GetLastNode()
+    {
+        return node2;
     }
 
     /// <summary>
@@ -171,7 +196,7 @@ public class Edge
     {
         if (startNode != node1 && startNode != node2)
         {
-            Debug.LogError("The provided startNode is not one of the primary Nodes of this Edge.");
+            Debug.LogError("The provided startNode (" + startNode + ") is not one of the primary Nodes of this Edge.");
         }
         List<Vector3> path = new List<Vector3>();
         path.Add(startNode == node1 ? node1.GetXYZ() : node2.GetXYZ());
