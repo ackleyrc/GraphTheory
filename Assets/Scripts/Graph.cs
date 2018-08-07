@@ -34,9 +34,49 @@ public class Graph
     }
 
     /// <summary>
+    /// Determines whether there is a series of edges that continusously connects from the startNode to the endNode. 
+    /// Optionally accepts a predicate function filtering out edges that do not meet the provided criteria.
+    /// </summary>
+    /// <param name="startNode"></param>
+    /// <param name="endNode"></param>
+    /// <param name="criteria"></param>
+    /// <returns></returns>
+    public bool DoesPathExist(Node startNode, Node endNode, NodeEdgePairs.EdgeFilterCriteria criteria = null)
+    {
+        HashSet<Node> closedSet = new HashSet<Node> { startNode };
+
+        Queue<Node> queue = new Queue<Node>();
+        queue.Enqueue(startNode);
+
+        while (queue.Count > 0)
+        {
+            Node node = queue.Dequeue();
+            foreach (Edge edge in edgesFromNode.GetEdges(node, criteria))
+            {
+                Node otherNode = edge.GetOtherNode(node);
+
+                if (!closedSet.Contains(otherNode))
+                {
+                    if (criteria == null || criteria(edge))
+                    {
+                        if (otherNode == endNode)
+                        {
+                            return true;
+                        }
+                        queue.Enqueue(otherNode);
+                        closedSet.Add(otherNode);
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Generates a random path of the required length that does not intersect with itself. 
-    /// Accepts an optional set of Nodes which should be ignored, or a dictionary of edges to ignore 
-    /// at a given node. Generates an error if required length cannot be met.
+    /// Accepts an optional set of Nodes which should be ignored, or a dictionary of Edges to ignore 
+    /// from a given node. Generates an error if required length cannot be met.
     /// </summary>
     /// <param name="requiredPathLength"></param>
     /// <param name="closedNodeSet"></param>
