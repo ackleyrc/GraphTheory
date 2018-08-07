@@ -26,15 +26,87 @@ public class Graph
         }
     }
 
-    public struct RandomPath
-    {
-        public Node startNode;
-        public Node finishNode;
-        public List<Edge> pathEdges;
+    /// <summary>
+    /// Finds the shortest series of edges that continuously connect from the startNode to the endNode. 
+    /// Optionally accepts a predicate function filtering out edges that do not meet the provided criteria. 
+    /// If no path exists, the returned list will be empty. This implementation is based on the A* algorithm.
+    /// </summary>
+    /// <param name="startNode"></param>
+    /// <param name="endNode"></param>
+    /// <param name="criteria"></param>
+    /// <returns></returns>
+    public List<Node> GetShortestPath(Node startNode, Node endNode, NodeEdgePairs.EdgeFilterCriteria criteria = null)
+    {                 
+        List<Node> shortestPath = new List<Node>();
+
+        HashSet<Node> openNodes = new HashSet<Node>(); // set of nodes to be evaluated
+        HashSet<Node> closedNodes = new HashSet<Node>(); // set of nodes already evaluated
+
+        Dictionary<Node, Node> cameFrom = new Dictionary<Node, Node>(); // associates a key node with the node it came from
+        Dictionary<Node, float> gScore = new Dictionary<Node, float>(); // cost of getting to node from the startNode (inf if not included)
+        Dictionary<Node, float> fScore = new Dictionary<Node, float>(); // total cost of getting from start to end via a given node (partly known, partly heuristic)
+
+        openNodes.Add(startNode);
+        gScore.Add(startNode, 0f); // cost from start to start is zero
+        fScore.Add(startNode, (endNode.GetXYZ() - startNode.GetXYZ()).magnitude); // for start node, total cost is all heuristic (i.e unweighted distance to end)
+
+        while (openNodes.Count > 0)
+        {
+            // Get the node in the open set that has the current lowest fScore
+            Node currentNode = openNodes.First();
+            foreach (Node node in openNodes)
+            {
+                if (fScore.ContainsKey(node) && fScore[node] < fScore[currentNode])
+                {
+                    currentNode = node;
+                }
+            }
+
+            // if the current node is the target/goal endNode, then we've reached the end and can return the shortest path
+            if (currentNode == endNode)
+            {
+                shortestPath.Add(currentNode);
+                while (cameFrom.ContainsKey(currentNode))
+                {
+                    currentNode = cameFrom[currentNode];
+                    shortestPath.Add(currentNode); // adds nodes from finish to start
+                }
+                return shortestPath.AsEnumerable().Reverse().ToList(); // reverse nodes to order from start to finish
+            }
+
+            openNodes.Remove(currentNode);
+            closedNodes.Add(currentNode);
+
+            foreach (Edge edgeFromNode in edgesFromNode.GetEdges(currentNode, criteria))
+            {
+                Node otherNode = edgeFromNode.GetOtherNode(currentNode);
+
+                if (closedNodes.Contains(otherNode)) continue; // ignore if already evaluated
+                
+                float tentativeGScore = gScore[currentNode] + edgeFromNode.GetPathLength(true);
+
+                if (!openNodes.Contains(otherNode)) // newly discovered node
+                {
+                    openNodes.Add(otherNode);
+                }
+                else if (tentativeGScore >= gScore[otherNode])
+                {
+                    continue; // This is not a better path
+                }
+
+                // Otherwise, this is the best path up til now
+                cameFrom[otherNode] = currentNode;
+                gScore[otherNode] = tentativeGScore;
+                fScore[otherNode] = gScore[otherNode] + (endNode.GetXYZ() - otherNode.GetXYZ()).magnitude;
+            }
+        }
+
+        // If endNode not reached, return empty list
+        return shortestPath;
     }
 
     /// <summary>
-    /// Determines whether there is a series of edges that continusously connects from the startNode to the endNode. 
+    /// Determines whether there is a series of edges that continusously connect from the startNode to the endNode. 
     /// Optionally accepts a predicate function filtering out edges that do not meet the provided criteria.
     /// </summary>
     /// <param name="startNode"></param>
@@ -71,6 +143,13 @@ public class Graph
         }
 
         return false;
+    }
+
+    public struct RandomPath
+    {
+        public Node startNode;
+        public Node finishNode;
+        public List<Edge> pathEdges;
     }
 
     /// <summary>
@@ -264,7 +343,7 @@ public class Edge
     }
 
     /// <summary>
-    /// Sets the weight value for this Edge.
+    /// Sets the weight value for this Edge. For best results, use values >= 1.
     /// </summary>
     /// <param name="weight"></param>
     public void SetWeight(float weight)
